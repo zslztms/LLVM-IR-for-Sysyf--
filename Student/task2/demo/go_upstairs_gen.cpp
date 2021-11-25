@@ -8,20 +8,21 @@
 #include <iostream>
 #include <memory>
 
-#ifdef DEBUG  // 用于调试信息,大家可以在编译过程中通过" -DDEBUG"来开启这一选项
-#define DEBUG_OUTPUT std::cout << __LINE__ << std::endl;  // 输出行号的简单示例
+#ifdef DEBUG                                             // 用于调试信息,大家可以在编译过程中通过" -DDEBUG"来开启这一选项
+#define DEBUG_OUTPUT std::cout << __LINE__ << std::endl; // 输出行号的简单示例
 #else
 #define DEBUG_OUTPUT
 #endif
 
 #define CONST_INT(num) \
-    ConstantInt::get(num, module)
+  ConstantInt::get(num, module)
 
 #define CONST_FP(num) \
-    ConstantFP::get(num, module) // 得到常数值的表示,方便后面多次用到
+  ConstantFP::get(num, module) // 得到常数值的表示,方便后面多次用到
 
-int main() {
-  auto module = new Module("SysY code");  // module name是什么无关紧要
+int main()
+{
+  auto module = new Module("SysY code"); // module name是什么无关紧要
   auto builder = new IRStmtBuilder(nullptr, module);
   Type *Int32Type = Type::get_int32_type(module);
 
@@ -33,9 +34,8 @@ int main() {
   init_val.push_back(CONST_INT(4));
   init_val.push_back(CONST_INT(8));
   auto num_initializer = ConstantArray::get(arrayType_num, init_val);
-  auto num = GlobalVariable::create("num", module, arrayType_num, false, num_initializer);//          是否是常量定义，初始化常量(ConstantZero类)
-  auto x = GlobalVariable::create("x", module, arrayType_x, false, zero_initializer);// 参数解释：  名字name，所属module，全局变量类型type，
-
+  auto num = GlobalVariable::create("num", module, arrayType_num, false, num_initializer); //          是否是常量定义，初始化常量(ConstantZero类)
+  auto x = GlobalVariable::create("x", module, arrayType_x, false, zero_initializer);      // 参数解释：  名字name，所属module，全局变量类型type，
   auto n = GlobalVariable::create("n", module, Int32Type, false, zero_initializer);
   auto tmp = GlobalVariable::create("tmp", module, Int32Type, false, CONST_INT(1));
 
@@ -48,40 +48,41 @@ int main() {
 
   // 由函数类型得到函数
   auto climbStairsFun = Function::create(climbStairsFunTy,
-                                 "climbStairs", module);
+                                         "climbStairs", module);
 
   // BB的名字在生成中无所谓,但是可以方便阅读
   auto bb = BasicBlock::create(module, "entry", climbStairsFun);
-  
-  builder->set_insert_point(bb);                        // 一个BB的开始,将当前插入指令点的位置设在bb
-  
-  auto retAlloca = builder->create_alloca(Int32Type);   // 在内存中分配返回值的位置
-  auto nAlloca = builder->create_alloca(Int32Type);     // 在内存中分配参数n的位置
 
-  std::vector<Value *> args;  // 获取climbStairs函数的形参,通过Function中的iterator
-  for (auto arg = climbStairsFun->arg_begin(); arg != climbStairsFun->arg_end(); arg++) {
-    args.push_back(*arg);   // * 号运算符是从迭代器中取出迭代器当前指向的元素
+  builder->set_insert_point(bb); // 一个BB的开始,将当前插入指令点的位置设在bb
+
+  auto retAlloca = builder->create_alloca(Int32Type); // 在内存中分配返回值的位置
+  auto nAlloca = builder->create_alloca(Int32Type);   // 在内存中分配参数n的位置
+
+  std::vector<Value *> args; // 获取climbStairs函数的形参,通过Function中的iterator
+  for (auto arg = climbStairsFun->arg_begin(); arg != climbStairsFun->arg_end(); arg++)
+  {
+    args.push_back(*arg); // * 号运算符是从迭代器中取出迭代器当前指向的元素
   }
 
-  builder->create_store(args[0], nAlloca);  // store参数n
+  builder->create_store(args[0], nAlloca); // store参数n
 
   auto retBB = BasicBlock::create(
-      module, "", climbStairsFun);  // return分支,提前create,以便true分支可以br
+      module, "", climbStairsFun); // return分支,提前create,以便true分支可以br
 
-  auto nLoad = builder->create_load(nAlloca);           // 将参数n load上来
-  auto icmp = builder->create_icmp_lt(nLoad, CONST_INT(4));  // n和4的比较,注意ICMPLT
+  auto nLoad = builder->create_load(nAlloca);               // 将参数n load上来
+  auto icmp = builder->create_icmp_lt(nLoad, CONST_INT(4)); // n和4的比较,注意ICMPLT
 
-  auto trueBB = BasicBlock::create(module, "trueBB_if", climbStairsFun);    // true分支
-  auto falseBB = BasicBlock::create(module, "falseBB_if", climbStairsFun);  // false分支
+  auto trueBB = BasicBlock::create(module, "trueBB_if", climbStairsFun);   // true分支
+  auto falseBB = BasicBlock::create(module, "falseBB_if", climbStairsFun); // false分支
 
-  builder->create_cond_br(icmp, trueBB, falseBB);  // 条件BR
-  DEBUG_OUTPUT // 我调试的时候故意留下来的,以醒目地提醒你这个调试用的宏定义方法
-  builder->set_insert_point(trueBB);  // if true; 分支的开始需要SetInsertPoint设置
+  builder->create_cond_br(icmp, trueBB, falseBB); // 条件BR
+  DEBUG_OUTPUT                                    // 我调试的时候故意留下来的,以醒目地提醒你这个调试用的宏定义方法
+      builder->set_insert_point(trueBB);          // if true; 分支的开始需要SetInsertPoint设置
   nLoad = builder->create_load(nAlloca);
   builder->create_store(nLoad, retAlloca);
-  builder->create_br(retBB);  // br retBB
+  builder->create_br(retBB); // br retBB
 
-  builder->set_insert_point(falseBB);  // if false
+  builder->set_insert_point(falseBB); // if false
   auto *arrayType_dp = ArrayType::get(Int32Type, 10);
   auto dpAlloca = builder->create_alloca(arrayType_dp);
 
@@ -97,9 +98,9 @@ int main() {
   auto iAlloca = builder->create_alloca(Int32Type);
   builder->create_store(CONST_INT(3), iAlloca);
 
-  auto condBB = BasicBlock::create(module, "condBB_while", climbStairsFun);  // 条件BB
-  trueBB = BasicBlock::create(module, "trueBB_while", climbStairsFun);    // true分支
-  falseBB = BasicBlock::create(module, "falseBB_while", climbStairsFun);  // false分支
+  auto condBB = BasicBlock::create(module, "condBB_while", climbStairsFun); // 条件BB
+  trueBB = BasicBlock::create(module, "trueBB_while", climbStairsFun);      // true分支
+  falseBB = BasicBlock::create(module, "falseBB_while", climbStairsFun);    // false分支
 
   builder->create_br(condBB);
 
@@ -142,7 +143,7 @@ int main() {
   builder->create_store(dpLoad, retAlloca);
   builder->create_br(retBB);
 
-  builder->set_insert_point(retBB);  // ret分支
+  builder->set_insert_point(retBB); // ret分支
   auto retLoad = builder->create_load(retAlloca);
   builder->create_ret(retLoad);
 
@@ -156,7 +157,7 @@ int main() {
   retAlloca = builder->create_alloca(Int32Type);
   auto resAlloca = builder->create_alloca(Int32Type);
 
-  auto num0Gep = builder->create_gep(num, {CONST_INT(0), CONST_INT(0)});  // GEP: 这里为什么是{0, 0}呢? (实验报告相关)
+  auto num0Gep = builder->create_gep(num, {CONST_INT(0), CONST_INT(0)}); // GEP: 这里为什么是{0, 0}呢? (实验报告相关)
   auto num0Load = builder->create_load(num0Gep);
   builder->create_store(num0Load, n);
 
@@ -169,7 +170,7 @@ int main() {
   nLoad = builder->create_load(n);
   tmpLoad = builder->create_load(tmp);
   add = builder->create_iadd(nLoad, tmpLoad);
-  auto call = builder->create_call(climbStairsFun, {add});           // 为什么这里传的是{add}呢?
+  auto call = builder->create_call(climbStairsFun, {add}); // 为什么这里传的是{add}呢?
   builder->create_store(call, resAlloca);
 
   auto resLoad = builder->create_load(resAlloca);
