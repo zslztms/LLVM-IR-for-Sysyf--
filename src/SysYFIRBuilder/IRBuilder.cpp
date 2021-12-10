@@ -207,7 +207,7 @@ void IRBuilder::visit(SyntaxTree::FuncDef &node)
     {
         ret_addr = builder->create_alloca(INT32_T);
     }
-    else if (ret_type = FLOAT_T)
+    else if (ret_type == FLOAT_T)
     {
         ret_addr = builder->create_alloca(FLOAT_T);
     }
@@ -551,6 +551,7 @@ void IRBuilder::visit(SyntaxTree::LVal &node)
     {
         if (should_return_lvalue)
         {
+
             if (var->get_type()->get_pointer_element_type()->is_array_type())
             {
                 tmp_val = builder->create_gep(var, {CONST_INT(0), CONST_INT(0)});
@@ -1154,18 +1155,35 @@ void IRBuilder::visit(SyntaxTree::IfStmt &node)
     node.cond_exp->accept(*this);
     IF_While_Or_Cond_Stack.pop_back();
     auto ret_val = tmp_val;
-
+    bool m = true, n = false;
     auto *cond_val = dynamic_cast<CmpInst *>(ret_val);
     if (cond_val == nullptr)
-        cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
-
+    {
+        m = false;
+    }
+    auto *fcond_val = dynamic_cast<FCmpInst *>(ret_val);
+    if (m == false)
+    {
+        if (fcond_val != nullptr)
+            n = true;
+        else
+        {
+            cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
+        }
+    }
     if (node.else_statement)
     {
-        builder->create_cond_br(cond_val, trueBB, falseBB);
+        if (n == false)
+            builder->create_cond_br(cond_val, trueBB, falseBB);
+        if (n == true)
+            builder->create_cond_br(fcond_val, trueBB, falseBB);
     }
     else
     {
-        builder->create_cond_br(cond_val, trueBB, nextBB);
+        if (n == false)
+            builder->create_cond_br(cond_val, trueBB, nextBB);
+        if (n == true)
+            builder->create_cond_br(fcond_val, trueBB, nextBB);
     }
     cur_basic_block_list.pop_back();
     builder->set_insert_point(trueBB);
@@ -1237,12 +1255,26 @@ void IRBuilder::visit(SyntaxTree::WhileStmt &node)
     node.cond_exp->accept(*this);
     IF_While_Or_Cond_Stack.pop_back();
     auto ret_val = tmp_val;
+    bool m = true, n = false;
     auto *cond_val = dynamic_cast<CmpInst *>(ret_val);
     if (cond_val == nullptr)
     {
-        cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
+        m = false;
     }
-    builder->create_cond_br(cond_val, trueBB, nextBB);
+    auto *fcond_val = dynamic_cast<FCmpInst *>(ret_val);
+    if (m == false)
+    {
+        if (fcond_val != nullptr)
+            n = true;
+        else
+        {
+            cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
+        }
+    }
+    if (n == false)
+        builder->create_cond_br(cond_val, trueBB, nextBB);
+    if (n == true)
+        builder->create_cond_br(fcond_val, trueBB, nextBB);
     builder->set_insert_point(trueBB);
     cur_basic_block_list.push_back(trueBB);
     if (dynamic_cast<SyntaxTree::BlockStmt *>(node.statement.get()))
