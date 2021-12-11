@@ -16,12 +16,16 @@ public:
     void enter() {
         name2var.push_back({});
         name2func.push_back({});
+        name2array_size.push_back({});
+        name2array_const.push_back({});
     }
 
     // exit a scope
     void exit() {
         name2var.pop_back();
         name2func.pop_back();
+        name2array_size.pop_back();
+        name2array_const.pop_back();       
     }
 
     bool in_global() {
@@ -44,7 +48,7 @@ public:
     }
 
     Value* find(std::string name, bool isfunc) {
-        if (isfunc){
+        if (isfunc){   
             for (auto s = name2func.rbegin(); s!= name2func.rend();s++) {
                 auto iter = s->find(name);
                 if (iter != s->end()) {
@@ -63,10 +67,44 @@ public:
         return nullptr;
     }
 
+    bool push_size(std::string name, std::vector<int> size){
+        auto result = name2array_size[name2array_size.size() - 1].insert({name,size}).second;
+        return result;
+    }
+
+    std::vector<int> find_size(std::string name) {
+        for (auto s = name2array_size.rbegin(); s!=name2array_size.rend(); s++){
+            auto iter = s->find(name);
+            if (iter != s->end()) {
+                return iter->second;
+            }
+        }
+
+        return {};
+    }
+
+    bool push_const(std::string name, ConstantArray* size){
+        auto result = name2array_const[name2array_const.size() - 1].insert({name,size}).second;
+        return result;
+    }
+
+    ConstantArray* find_const(std::string name) {
+        for (auto s = name2array_const.rbegin(); s!=name2array_const.rend(); s++){
+            auto iter = s->find(name);
+            if (iter != s->end()) {
+                return iter->second;
+            }
+        }
+
+        return nullptr;
+    }
 
 private:
     std::vector<std::map<std::string, Value *>> name2var;
     std::vector<std::map<std::string, Value *>> name2func;
+    std::vector<std::map<std::string, std::vector<int>>> name2array_size;
+    std::vector<std::map<std::string, ConstantArray *>> name2array_const;
+
 };
 
 class IRBuilder: public SyntaxTree::Visitor

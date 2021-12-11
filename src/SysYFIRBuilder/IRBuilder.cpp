@@ -199,7 +199,7 @@ void IRBuilder::visit(SyntaxTree::FuncDef &node)
                 total_size *= (*iter);
             }
             array_sizes.insert(array_sizes.begin(), total_size);
-            // scope.push_size(func_fparams[i].name, array_sizes);
+            scope.push_size(func_fparams[i].name, array_sizes);
         }
     }
     // ret BB
@@ -271,113 +271,118 @@ void IRBuilder::visit(SyntaxTree::VarDef &node)
         cur_fun_entry_block = cur_fun->get_entry_block(); // entry block
         cur_fun_cur_block = cur_basic_block_list.back();  // current block
     }
-    // if (node.is_constant)
-    // {
-    //     // constant
-    //     Value *var;
-    //     if (node.array_length.empty())
-    //     {
-    //         if (node.btype == SyntaxTree::Type::INT)
-    //         {
-    //             node.initializers->accept(*this);
-    //             if (tmp_val->get_type()->is_float_type())
-    //             {
-    //                 tmp_val = builder->create_fptosi(tmp_val, INT32_T);
-    //             }
-    //             auto initializer = dynamic_cast<ConstantInt *>(tmp_val)->get_value();
-    //             var = ConstantInt::get(initializer, module.get());
-    //         }
-    //         else if (node.btype == SyntaxTree::Type::FLOAT)
-    //         {
-    //             node.initializers->accept(*this);
-    //             if (tmp_val->get_type()->is_integer_type())
-    //                 tmp_val = builder->create_sitofp(tmp_val, FLOAT_T);
-    //             auto initializer = dynamic_cast<ConstantFloat *>(tmp_val)->get_value();
-    //             var = ConstantFloat::get(initializer, module.get());
-    //         }
-    //         scope.push(node.name, var);
-    //     }
-    //     else
-    //     {
-    //         // array
-    //         array_bounds.clear();
-    //         array_sizes.clear();
-    //         for (const auto &bound_expr : node.array_length)
-    //         {
-    //             bound_expr->accept(*this);
-    //             auto bound_const = dynamic_cast<ConstantInt *>(tmp_val);
-    //             auto bound = bound_const->get_value();
-    //             array_bounds.push_back(bound);
-    //         }
-    //         int total_size = 1;
-    //         for (auto iter = array_bounds.rbegin(); iter != array_bounds.rend();
-    //              iter++)
-    //         {
-    //             array_sizes.insert(array_sizes.begin(), total_size);
-    //             total_size *= (*iter);
-    //         }
-    //         array_sizes.insert(array_sizes.begin(), total_size);
-    //         if (node.btype == SyntaxTree::Type::FLOAT)
-    //         {
-    //             var_type = FLOAT_T;
-    //         }
-    //         else
-    //         {
-    //             var_type = INT32_T;
-    //         }
-    //         auto *array_type = ArrayType::get(var_type, total_size);
+    //TAG-BEGIN
 
-    //         initval.clear();
-    //         init_val.clear();
-    //         cur_depth = 0;
-    //         cur_pos = 0;
-    //         node.initializers->accept(*this);
-    //         auto initializer = ConstantArray::get(array_type, init_val);
+    if (node.is_constant)
+    {
+        // constant
+        Value *var;
+        if (node.array_length.empty())
+        {
+            if (node.btype == SyntaxTree::Type::INT)
+            {
+                node.initializers->accept(*this);
+                if (tmp_val->get_type()->is_float_type())
+                {
+                    tmp_val = builder->create_fptosi(tmp_val, INT32_T);
+                }
+                auto initializer = dynamic_cast<ConstantInt *>(tmp_val)->get_value();
+                var = ConstantInt::get(initializer, module.get());
+            }
+            else if (node.btype == SyntaxTree::Type::FLOAT)
+            {
+                node.initializers->accept(*this);
+                if (tmp_val->get_type()->is_integer_type())
+                    tmp_val = builder->create_sitofp(tmp_val, FLOAT_T);
+                auto initializer = dynamic_cast<ConstantFloat *>(tmp_val)->get_value();
+                var = ConstantFloat::get(initializer, module.get());
+            }
+            scope.push(node.name, var);
+        }
+        else
+        {
+            // array
+            array_bounds.clear();
+            array_sizes.clear();
+            for (const auto &bound_expr : node.array_length)
+            {
+                bound_expr->accept(*this);
+                auto bound_const = dynamic_cast<ConstantInt *>(tmp_val);
+                auto bound = bound_const->get_value();
+                array_bounds.push_back(bound);
+            }
+            int total_size = 1;
+            for (auto iter = array_bounds.rbegin(); iter != array_bounds.rend();
+                 iter++)
+            {
+                array_sizes.insert(array_sizes.begin(), total_size);
+                total_size *= (*iter);
+            }
+            array_sizes.insert(array_sizes.begin(), total_size);
+            if (node.btype == SyntaxTree::Type::FLOAT)
+            {
+                var_type = FLOAT_T;
+            }
+            else
+            {
+                var_type = INT32_T;
+            }
+            auto *array_type = ArrayType::get(var_type, total_size);
 
-    //         if (scope.in_global())
-    //         {
-    //             var = GlobalVariable::create(node.name, module.get(), array_type, true, initializer);
-    //             scope.push(node.name, var);
-    //             // scope.push_size(node.name, array_sizes);
-    //             // scope.push_const(node.name, initializer);
-    //         }
-    //         else
-    //         {
-    //             auto tmp_terminator = cur_fun_entry_block->get_terminator();
-    //             if (tmp_terminator != nullptr)
-    //             {
-    //                 cur_fun_entry_block->get_instructions().pop_back();
-    //             }
-    //             var = builder->create_alloca(array_type);
-    //             cur_fun_cur_block->get_instructions().pop_back();
-    //             cur_fun_entry_block->add_instruction(dynamic_cast<Instruction *>(var));
-    //             dynamic_cast<Instruction *>(var)->set_parent(cur_fun_entry_block);
-    //             if (tmp_terminator != nullptr)
-    //             {
-    //                 cur_fun_entry_block->add_instruction(tmp_terminator);
-    //             }
-    //             for (int i = 0; i < array_sizes[0]; i++)
-    //             {
-    //                 if (initval[i])
-    //                 {
-    //                     builder->create_store(initval[i], builder->create_gep(var, {CONST_INT(0), CONST_INT(i)}));
-    //                 }
-    //                 else
-    //                 {
-    //                     if (node.btype == SyntaxTree::Type::FLOAT)
-    //                         builder->create_store(CONST_FLOAT(0), builder->create_gep(var, {CONST_INT(0), CONST_INT(i)}));
-    //                     else
-    //                         builder->create_store(CONST_INT(0), builder->create_gep(var, {CONST_INT(0), CONST_INT(i)}));
-    //                 }
-    //             }
-    //             scope.push(node.name, var);
-    //             // scope.push_size(node.name, array_sizes);
-    //             // scope.push_const(node.name, initializer);
-    //         }
-    //     }
-    // }
-    // else
-    // {
+            initval.clear();
+            init_val.clear();
+            cur_depth = 0;
+            cur_pos = 0;
+            node.initializers->accept(*this);
+            auto initializer = ConstantArray::get(array_type, init_val);
+
+            if (scope.in_global())
+            {
+                var = GlobalVariable::create(node.name, module.get(), array_type, true, initializer);
+                scope.push(node.name, var);
+                scope.push_size(node.name, array_sizes);
+                scope.push_const(node.name, initializer);
+            }
+            else
+            {
+                auto tmp_terminator = cur_fun_entry_block->get_terminator();
+                if (tmp_terminator != nullptr)
+                {
+                    cur_fun_entry_block->get_instructions().pop_back();
+                }
+                var = builder->create_alloca(array_type);
+                cur_fun_cur_block->get_instructions().pop_back();
+                cur_fun_entry_block->add_instruction(dynamic_cast<Instruction *>(var));
+                dynamic_cast<Instruction *>(var)->set_parent(cur_fun_entry_block);
+                if (tmp_terminator != nullptr)
+                {
+                    cur_fun_entry_block->add_instruction(tmp_terminator);
+                }
+                for (int i = 0; i < array_sizes[0]; i++)
+                {
+                    if (initval[i])
+                    {
+                        builder->create_store(initval[i], builder->create_gep(var, {CONST_INT(0), CONST_INT(i)}));
+                    }
+                    else
+                    {
+                        if (node.btype == SyntaxTree::Type::FLOAT)
+                            builder->create_store(CONST_FLOAT(0), builder->create_gep(var, {CONST_INT(0), CONST_INT(i)}));
+                        else
+                            builder->create_store(CONST_INT(0), builder->create_gep(var, {CONST_INT(0), CONST_INT(i)}));
+                    }
+                }
+                scope.push(node.name, var);
+                scope.push_size(node.name, array_sizes);
+                scope.push_const(node.name, initializer);
+            }
+        }
+    }
+    else
+    {
+
+    //TAG-END
+
     if (node.btype == SyntaxTree::Type::FLOAT)
     {
         var_type = FLOAT_T;
@@ -488,14 +493,14 @@ void IRBuilder::visit(SyntaxTree::VarDef &node)
                 auto initializer = ConstantArray::get(array_type, init_val);
                 var = GlobalVariable::create(node.name, module.get(), array_type, false, initializer);
                 scope.push(node.name, var);
-                // scope.push_size(node.name, array_sizes);
+                scope.push_size(node.name, array_sizes);
             }
             else
             {
                 auto initializer = ConstantZero::get(array_type, module.get());
                 var = GlobalVariable::create(node.name, module.get(), array_type, false, initializer);
                 scope.push(node.name, var);
-                // scope.push_size(node.name, array_sizes);
+                scope.push_size(node.name, array_sizes);
             }
         }
         else
@@ -535,10 +540,10 @@ void IRBuilder::visit(SyntaxTree::VarDef &node)
                 }
             }
             scope.push(node.name, var);
-            // scope.push_size(node.name, array_sizes);
+            scope.push_size(node.name, array_sizes);
         } // if of global check
     }
-    // }
+    }
 }
 
 void IRBuilder::visit(SyntaxTree::LVal &node)
@@ -594,90 +599,96 @@ void IRBuilder::visit(SyntaxTree::LVal &node)
             }
         }
     }
-    // else
-    // {
-    //     auto var_sizes = scope.find_size(node.name);
-    //     std::vector<Value *> all_index;
-    //     Value *var_index = nullptr;
-    //     int index_const = 0;
-    //     bool const_check = true;
 
-    //     auto const_array = scope.find_const(node.name);
-    //     if (const_array == nullptr)
-    //     {
-    //         const_check = false;
-    //     }
+    //TAG-BEGIN
 
-    //     for (int i = 0; i < node.array_index.size(); i++)
-    //     {
-    //         node.array_index[i]->accept(*this);
-    //         all_index.push_back(tmp_val);
-    //         if (const_check == true)
-    //         {
-    //             auto tmp_const = dynamic_cast<ConstantInt *>(tmp_val);
-    //             if (tmp_const == nullptr)
-    //             {
-    //                 const_check = false;
-    //             }
-    //             else
-    //             {
-    //                 index_const = var_sizes[i + 1] * tmp_const->get_value() + index_const;
-    //             }
-    //         }
-    //     }
+    else
+    {
+        auto var_sizes = scope.find_size(node.name);
+        std::vector<Value *> all_index;
+        Value *var_index = nullptr;
+        int index_const = 0;
+        bool const_check = true;
 
-    //     if (should_return_lvalue == false && const_check)
-    //     {
-    //         ConstantInt *tmp_const = dynamic_cast<ConstantInt *>(const_array->get_element_value(index_const));
-    //         tmp_val = CONST_INT(tmp_const->get_value());
-    //     }
-    //     else
-    //     {
-    //         for (int i = 0; i < all_index.size(); i++)
-    //         {
-    //             auto index_val = all_index[i];
-    //             Value *one_index;
-    //             if (var_sizes[i + 1] > 1)
-    //             {
-    //                 one_index = builder->create_imul(CONST_INT(var_sizes[i + 1]), index_val);
-    //             }
-    //             else
-    //             {
-    //                 one_index = index_val;
-    //             }
-    //             if (var_index == nullptr)
-    //             {
-    //                 var_index = one_index;
-    //             }
-    //             else
-    //             {
-    //                 var_index = builder->create_iadd(var_index, one_index);
-    //             }
-    //         } // end for
-    //         if (node.array_index.size() > 1 || 1)
-    //         {
-    //             Value *tmp_ptr;
-    //             if (var->get_type()->get_pointer_element_type()->is_pointer_type())
-    //             {
-    //                 auto tmp_load = builder->create_load(var);
-    //                 tmp_ptr = builder->create_gep(tmp_load, {var_index});
-    //             }
-    //             else
-    //             {
-    //                 tmp_ptr = builder->create_gep(var, {CONST_INT(0), var_index});
-    //             }
-    //             if (should_return_lvalue)
-    //             {
-    //                 tmp_val = tmp_ptr;
-    //                 require_lvalue = false;
-    //             }
-    //             else
-    //             {
-    //                 tmp_val = builder->create_load(tmp_ptr);
-    //             }
-    //         }
-    //     }
-    // }
+        auto const_array = scope.find_const(node.name);
+        if (const_array == nullptr)
+        {
+            const_check = false;
+        }
+
+        for (int i = 0; i < node.array_index.size(); i++)
+        {
+            node.array_index[i]->accept(*this);
+            all_index.push_back(tmp_val);
+            if (const_check == true)
+            {
+                auto tmp_const = dynamic_cast<ConstantInt *>(tmp_val);
+                if (tmp_const == nullptr)
+                {
+                    const_check = false;
+                }
+                else
+                {
+                    index_const = var_sizes[i + 1] * tmp_const->get_value() + index_const;
+                }
+            }
+        }
+
+        if (should_return_lvalue == false && const_check)
+        {
+            ConstantInt *tmp_const = dynamic_cast<ConstantInt *>(const_array->get_element_value(index_const));
+            tmp_val = CONST_INT(tmp_const->get_value());
+        }
+        else
+        {
+            for (int i = 0; i < all_index.size(); i++)
+            {
+                auto index_val = all_index[i];
+                Value *one_index;
+                if (var_sizes[i + 1] > 1)
+                {
+                    one_index = builder->create_imul(CONST_INT(var_sizes[i + 1]), index_val);
+                }
+                else
+                {
+                    one_index = index_val;
+                }
+                if (var_index == nullptr)
+                {
+                    var_index = one_index;
+                }
+                else
+                {
+                    var_index = builder->create_iadd(var_index, one_index);
+                }
+            } // end for
+            if (node.array_index.size() > 1 || 1)
+            {
+                Value *tmp_ptr;
+                if (var->get_type()->get_pointer_element_type()->is_pointer_type())
+                {
+                    auto tmp_load = builder->create_load(var);
+                    tmp_ptr = builder->create_gep(tmp_load, {var_index});
+                }
+                else
+                {
+                    tmp_ptr = builder->create_gep(var, {CONST_INT(0), var_index});
+                }
+                if (should_return_lvalue)
+                {
+                    tmp_val = tmp_ptr;
+                    require_lvalue = false;
+                }
+                else
+                {
+                    tmp_val = builder->create_load(tmp_ptr);
+                }
+            }
+        }
+    }
+
+    //TAG-END
+
 }
 void IRBuilder::visit(SyntaxTree::AssignStmt &node)
 {
@@ -770,43 +781,47 @@ void IRBuilder::visit(SyntaxTree::UnaryCondExpr &node)
 void IRBuilder::visit(SyntaxTree::BinaryCondExpr &node)
 {
     CmpInst *cond_val;
-    // TODO: && || !
-    //  if (node.op == SyntaxTree::BinaryCondOp::LAND)
-    //  {
-    //      auto trueBB = BasicBlock::create(module.get(), "", cur_fun);
-    //      IF_While_And_Cond_Stack.push_back({trueBB, IF_While_Or_Cond_Stack.back().falseBB});
-    //      node.lhs->accept(*this);
-    //      IF_While_And_Cond_Stack.pop_back();
-    //      auto ret_val = tmp_val;
-    //
-    //          cond_val = dynamic_cast<CmpInst *>(ret_val);
-    //      if (cond_val == nullptr)
-    //      {
-    //              cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
-    //          }
-    //      }
-    //      builder->create_cond_br(cond_val, trueBB, IF_While_Or_Cond_Stack.back().falseBB);
-    //      builder->set_insert_point(trueBB);
-    //      node.rhs->accept(*this);
-    //  }
-    //  else if (node.op == SyntaxTree::BinaryCondOp::LOR)
-    //  {
-    //      auto falseBB = BasicBlock::create(module.get(), "", cur_fun);
-    //      IF_While_Or_Cond_Stack.push_back({IF_While_Or_Cond_Stack.back().trueBB, falseBB});
-    //      node.lhs->accept(*this);
-    //      IF_While_Or_Cond_Stack.pop_back();
-    //      auto ret_val = tmp_val;
-    //      cond_val = dynamic_cast<CmpInst *>(ret_val);
-    //      if (cond_val == nullptr)
-    //      {
-    //              cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
-    //      }
-    //      builder->create_cond_br(cond_val, IF_While_Or_Cond_Stack.back().trueBB, falseBB);
-    //      builder->set_insert_point(falseBB);
-    //      node.rhs->accept(*this);
-    //  }
-    //  else
-    //  {
+
+    //TAG-BEGIN
+
+    //TODO: && || !
+     if (node.op == SyntaxTree::BinaryCondOp::LAND)
+     {
+         auto trueBB = BasicBlock::create(module.get(), "", cur_fun);
+         IF_While_And_Cond_Stack.push_back({trueBB, IF_While_Or_Cond_Stack.back().falseBB});
+         node.lhs->accept(*this);
+         IF_While_And_Cond_Stack.pop_back();
+         auto ret_val = tmp_val;
+    
+             cond_val = dynamic_cast<CmpInst *>(ret_val);
+         if (cond_val == nullptr)
+         {
+                 cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
+         }
+         builder->create_cond_br(cond_val, trueBB, IF_While_Or_Cond_Stack.back().falseBB);
+         builder->set_insert_point(trueBB);
+         node.rhs->accept(*this);
+     }
+     else if (node.op == SyntaxTree::BinaryCondOp::LOR)
+     {
+         auto falseBB = BasicBlock::create(module.get(), "", cur_fun);
+         IF_While_Or_Cond_Stack.push_back({IF_While_Or_Cond_Stack.back().trueBB, falseBB});
+         node.lhs->accept(*this);
+         IF_While_Or_Cond_Stack.pop_back();
+         auto ret_val = tmp_val;
+         cond_val = dynamic_cast<CmpInst *>(ret_val);
+         if (cond_val == nullptr)
+         {
+                 cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
+         }
+         builder->create_cond_br(cond_val, IF_While_Or_Cond_Stack.back().trueBB, falseBB);
+         builder->set_insert_point(falseBB);
+         node.rhs->accept(*this);
+     }
+     else
+     {
+
+    //TAG-END
     node.lhs->accept(*this);
     auto l_val = tmp_val;
     node.rhs->accept(*this);
@@ -926,7 +941,7 @@ void IRBuilder::visit(SyntaxTree::BinaryCondExpr &node)
         break;
     }
     tmp_val = cmp;
-    // }
+    }
 }
 
 void IRBuilder::visit(SyntaxTree::BinaryExpr &node)
