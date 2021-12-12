@@ -52,7 +52,7 @@ int main()
     builder->create_store(args[1], bAlloca);    // store参数b
     auto aLoad = builder->create_load(aAlloca); // 将参数a load上来
     auto bLoad = builder->create_load(bAlloca); // 将参数b load上来
-    auto add = builder->create_iadd(aAlloca, bAlloca);
+    auto add = builder->create_iadd(aLoad, bLoad);
     auto sub = builder->create_isub(add, CONST_INT(1));
     builder->create_ret(sub);
     // main函数

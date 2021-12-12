@@ -38,7 +38,7 @@ int main()
     builder->create_store(CONST_INT(0), retAlloca);
     builder->create_store(CONST_INT(10), a);
     auto aLoad = builder->create_load(a);                             // 将全局变量a load上来
-    auto icmp = builder->create_icmp_lt(aLoad, CONST_INT(0));         // a和0的比较
+    auto icmp = builder->create_icmp_gt(aLoad, CONST_INT(0));         // a和0的比较
     auto retBB = BasicBlock::create(module, "", mainFun);             // return分支,提前create,以便true分支可以br
     auto trueBB = BasicBlock::create(module, "trueBB_if", mainFun);   // true分支
     auto falseBB = BasicBlock::create(module, "falseBB_if", mainFun); // false分支
