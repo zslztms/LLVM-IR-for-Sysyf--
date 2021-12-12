@@ -16,15 +16,15 @@ struct true_false_BB
     BasicBlock *trueBB = nullptr;
     BasicBlock *falseBB = nullptr;
 };
-std::list<true_false_BB> IF_While_And_Cond_Stack;
-std::list<true_false_BB> IF_While_Or_Cond_Stack;
-std::list<true_false_BB> While_Stack;
 std::vector<BasicBlock *> cur_basic_block_list;
 std::vector<int> array_bounds;
 std::vector<int> array_sizes;
 bool return_type_is_int = true;
 int cur_pos;
 int cur_depth;
+std::list<true_false_BB> Short_for_AND;
+std::list<true_false_BB> Short_for_OR;
+std::list<true_false_BB> Cond_While;
 std::map<int, Value *> initval;
 std::vector<Constant *> init_val;
 bool var_type_is_int = true;
@@ -748,9 +748,9 @@ void IRBuilder::visit(SyntaxTree::BinaryCondExpr &node)
     if (node.op == SyntaxTree::BinaryCondOp::LAND)
     {
         auto trueBB = BasicBlock::create(module.get(), "", cur_fun);
-        IF_While_And_Cond_Stack.push_back({trueBB, IF_While_Or_Cond_Stack.back().falseBB});
+        Short_for_AND.push_back({trueBB, Short_for_OR.back().falseBB});
         node.lhs->accept(*this);
-        IF_While_And_Cond_Stack.pop_back();
+        Short_for_AND.pop_back();
         auto ret_val = tmp_val;
 
         cond_val = dynamic_cast<CmpInst *>(ret_val);
@@ -758,23 +758,23 @@ void IRBuilder::visit(SyntaxTree::BinaryCondExpr &node)
         {
             cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
         }
-        builder->create_cond_br(cond_val, trueBB, IF_While_Or_Cond_Stack.back().falseBB);
+        builder->create_cond_br(cond_val, trueBB, Short_for_OR.back().falseBB);
         builder->set_insert_point(trueBB);
         node.rhs->accept(*this);
     }
     else if (node.op == SyntaxTree::BinaryCondOp::LOR)
     {
         auto falseBB = BasicBlock::create(module.get(), "", cur_fun);
-        IF_While_Or_Cond_Stack.push_back({IF_While_Or_Cond_Stack.back().trueBB, falseBB});
+        Short_for_OR.push_back({Short_for_OR.back().trueBB, falseBB});
         node.lhs->accept(*this);
-        IF_While_Or_Cond_Stack.pop_back();
+        Short_for_OR.pop_back();
         auto ret_val = tmp_val;
         cond_val = dynamic_cast<CmpInst *>(ret_val);
         if (cond_val == nullptr)
         {
             cond_val = builder->create_icmp_ne(tmp_val, CONST_INT(0));
         }
-        builder->create_cond_br(cond_val, IF_While_Or_Cond_Stack.back().trueBB, falseBB);
+        builder->create_cond_br(cond_val, Short_for_OR.back().trueBB, falseBB);
         builder->set_insert_point(falseBB);
         node.rhs->accept(*this);
     }
@@ -1122,13 +1122,13 @@ void IRBuilder::visit(SyntaxTree::IfStmt &node)
     auto trueBB = BasicBlock::create(module.get(), "trueBB_if", cur_fun);
     auto falseBB = BasicBlock::create(module.get(), "falseBB_if", cur_fun);
     auto nextBB = BasicBlock::create(module.get(), "nextBB_if", cur_fun);
-    IF_While_Or_Cond_Stack.push_back({trueBB, nextBB});
+    Short_for_OR.push_back({trueBB, nextBB});
     if (node.else_statement)
     {
-        IF_While_Or_Cond_Stack.back().falseBB = falseBB;
+        Short_for_OR.back().falseBB = falseBB;
     }
     node.cond_exp->accept(*this);
-    IF_While_Or_Cond_Stack.pop_back();
+    Short_for_OR.pop_back();
     auto ret_val = tmp_val;
     bool m = true, n = false;
     auto *cond_val = dynamic_cast<CmpInst *>(ret_val);
@@ -1219,16 +1219,16 @@ void IRBuilder::visit(SyntaxTree::WhileStmt &node)
     auto whileBB = BasicBlock::create(module.get(), "", cur_fun);
     auto trueBB = BasicBlock::create(module.get(), "", cur_fun);
     auto nextBB = BasicBlock::create(module.get(), "", cur_fun);
-    While_Stack.push_back({whileBB, nextBB});
+    Cond_While.push_back({whileBB, nextBB});
     if (builder->get_insert_block()->get_terminator() == nullptr)
     {
         builder->create_br(whileBB);
     }
     cur_basic_block_list.pop_back();
     builder->set_insert_point(whileBB);
-    IF_While_Or_Cond_Stack.push_back({trueBB, nextBB});
+    Short_for_OR.push_back({trueBB, nextBB});
     node.cond_exp->accept(*this);
-    IF_While_Or_Cond_Stack.pop_back();
+    Short_for_OR.pop_back();
     auto ret_val = tmp_val;
     bool m = true, n = false;
     auto *cond_val = dynamic_cast<CmpInst *>(ret_val);
@@ -1269,15 +1269,15 @@ void IRBuilder::visit(SyntaxTree::WhileStmt &node)
     cur_basic_block_list.pop_back();
     builder->set_insert_point(nextBB);
     cur_basic_block_list.push_back(nextBB);
-    While_Stack.pop_back();
+    Cond_While.pop_back();
 }
 
 void IRBuilder::visit(SyntaxTree::BreakStmt &node)
 {
-    builder->create_br(While_Stack.back().falseBB);
+    builder->create_br(Cond_While.back().falseBB);
 }
 
 void IRBuilder::visit(SyntaxTree::ContinueStmt &node)
 {
-    builder->create_br(While_Stack.back().trueBB);
+    builder->create_br(Cond_While.back().trueBB);
 }
